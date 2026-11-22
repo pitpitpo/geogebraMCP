@@ -59,35 +59,29 @@ async function testGeminiCompatibility() {
   console.log('🧪 Testing Gemini 2.5 Pro Preview Compatibility\n');
   
   const allTools = toolRegistry.getTools();
-  const exportTools = allTools.filter(tool => tool.name.includes('export'));
   
   let totalErrors = 0;
   const problematicTools: string[] = [];
   
-  console.log(`Found ${exportTools.length} export tools to validate:\n`);
+  console.log(`Found ${allTools.length} total tools to validate for Gemini compatibility:\n`);
   
-  for (const tool of exportTools) {
-    console.log(`📋 Validating: ${tool.name}`);
-    
+  for (const tool of allTools) {
     const validation = validateSchema(tool.inputSchema as JSONSchema, tool.name);
     
-    if (validation.isValid) {
-      console.log(`   ✅ Schema is Gemini-compatible`);
-    } else {
-      console.log(`   ❌ Schema has compatibility issues:`);
+    if (!validation.isValid) {
+      console.log(`❌ Tool "${tool.name}" has compatibility issues:`);
       validation.errors.forEach(error => {
         console.log(`      - ${error}`);
       });
       totalErrors += validation.errors.length;
       problematicTools.push(tool.name);
     }
-    console.log();
   }
   
   // Summary
   console.log('📊 Validation Summary:');
-  console.log(`   Total tools validated: ${exportTools.length}`);
-  console.log(`   Compatible tools: ${exportTools.length - problematicTools.length}`);
+  console.log(`   Total tools validated: ${allTools.length}`);
+  console.log(`   Compatible tools: ${allTools.length - problematicTools.length}`);
   console.log(`   Problematic tools: ${problematicTools.length}`);
   console.log(`   Total errors: ${totalErrors}\n`);
   
@@ -97,8 +91,9 @@ async function testGeminiCompatibility() {
     console.log('\nThese tools need schema fixes for Gemini compatibility.');
     process.exit(1);
   } else {
-    console.log('✅ All export tools are compatible with Gemini 2.5 Pro Preview!');
+    console.log(`✅ All ${allTools.length} tools are fully compatible with Gemini 2.5 Pro Preview!`);
     console.log('The MCP server should now work correctly with Gemini.');
+    process.exit(0);
   }
 }
 

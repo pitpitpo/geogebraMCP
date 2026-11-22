@@ -3,6 +3,8 @@
  * Type definitions for GeoGebra Apps API integration
  */
 
+import { GeoGebraVersionProfile } from '../utils/version/types';
+
 // GeoGebra Instance Configuration
 export interface GeoGebraConfig {
   appName?: 'graphing' | 'geometry' | '3d' | 'classic' | 'suite' | 'evaluator' | 'scientific' | 'notes';
@@ -47,9 +49,11 @@ export interface GeoGebraObject {
 export interface GeoGebraInstanceState {
   id: string;
   isReady: boolean;
-  objectCount: number;
+  initialized?: boolean;
+  objectCount?: number;
   lastActivity: Date;
   config: GeoGebraConfig;
+  versionProfile?: GeoGebraVersionProfile;
 }
 
 // GeoGebra Pool Configuration
@@ -115,6 +119,34 @@ export interface GeoGebraAPI {
     width?: number;
     height?: number;
   }): Promise<string | string[]>;
+
+  // Styling and Property management
+  setColor?(objName: string, red: number, green: number, blue: number, alpha?: number): Promise<void>;
+  setVisible?(objName: string, visible: boolean): Promise<void>;
+  setLabelVisible?(objName: string, visible: boolean): Promise<void>;
+  setLabelStyle?(objName: string, style: number): Promise<void>;
+  setCaption?(objName: string, caption: string): Promise<void>;
+  setFixed?(objName: string, fixed: boolean, selectionAllowed?: boolean): Promise<void>;
+  setCoords?(objName: string, x: number, y: number, z?: number): Promise<void>;
+  setLayer?(objName: string, layer: number): Promise<void>;
+  setLineThickness?(objName: string, thickness: number): Promise<void>;
+  setLineStyle?(objName: string, style: number): Promise<void>;
+  setPointSize?(objName: string, size: number): Promise<void>;
+  setPointStyle?(objName: string, style: number): Promise<void>;
+  setFilling?(objName: string, filling: number): Promise<void>;
+  getDefinitionString?(objName: string): Promise<string>;
+  getCommandString?(objName: string): Promise<string>;
+
+  // Perspective and View History
+  setPerspective?(perspective: string): Promise<void>;
+  undo?(): Promise<void>;
+  redo?(): Promise<void>;
+
+  // XML and State Serialization
+  getXML?(): Promise<string>;
+  setXML?(xml: string): Promise<void>;
+  getBase64?(): Promise<string>;
+  setBase64?(base64: string): Promise<void>;
 }
 
 // Error types

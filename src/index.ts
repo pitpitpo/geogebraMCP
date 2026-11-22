@@ -65,4 +65,5 @@ if (require.main === module) {
 
 export { McpServer } from './server';
 export { toolRegistry } from './tools';
-export * from './types/mcp'; 
+export * from './types/mcp';
+export * from './utils/version'; 

@@ -1,6 +1,7 @@
 import { ToolDefinition } from '../types/mcp';
 // import { MockGeoGebraInstance } from '../utils/geogebra-mock'; // Mock implementation for testing
 import { GeoGebraInstance } from '../utils/geogebra-instance'; // Real implementation (production)
+import { GeoGebraCompatibilityEngine } from '../utils/version';
 import logger from '../utils/logger';
 import { 
   validateObjectName, 
@@ -65,7 +66,7 @@ class GeoGebraInstancePool {
   }
 }
 
-const instancePool = new GeoGebraInstancePool();
+export const instancePool = new GeoGebraInstancePool();
 
 // Cleanup on process exit
 process.on('exit', () => {
@@ -634,13 +635,67 @@ export const geogebraTools: ToolDefinition[] = [
                 isReady,
                 instanceId: state.id,
                 lastActivity: state.lastActivity,
-                config: state.config
+                config: state.config,
+                versionProfile: (state as any).versionProfile
               }
             }, null, 2)
           }]
         };
       } catch (error) {
         logger.error('Failed to get instance status', error);
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              success: false,
+              error: error instanceof Error ? error.message : String(error)
+            }, null, 2)
+          }],
+          isError: true
+        };
+      }
+    }
+  },
+
+  {
+    tool: {
+      name: 'geogebra_detect_version',
+      description: 'Auto-detects running GeoGebra version, generation (Classic 4/5/6 to Latest), app flavor, environment, and returns complete cross-version compatibility report and capability matrix',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          forceRefresh: {
+            type: 'boolean',
+            description: 'Whether to force re-detection of the runtime version from the active applet'
+          }
+        },
+        required: []
+      }
+    },
+    handler: async (params: { forceRefresh?: boolean }) => {
+      try {
+        const instance = await instancePool.getDefaultInstance();
+        let profile;
+        if (params && params.forceRefresh && typeof (instance as any).detectVersion === 'function') {
+          profile = await (instance as any).detectVersion();
+        } else if (typeof (instance as any).getVersionProfile === 'function') {
+          profile = (instance as any).getVersionProfile();
+        } else {
+          profile = (instance.getState() as any).versionProfile;
+        }
+
+        const report = GeoGebraCompatibilityEngine.generateReport(profile);
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              success: true,
+              versionReport: report
+            }, null, 2)
+          }]
+        };
+      } catch (error) {
+        logger.error('Failed to detect GeoGebra version', error);
         return {
           content: [{
             type: 'text' as const,

@@ -4,6 +4,13 @@ import logger from '../utils/logger';
 import { geogebraTools } from './geogebra-tools';
 import { educationalTemplateTools } from './educational-templates';
 import { performanceTools } from './performance-tools';
+import { objectStylingTools } from './object-styling-tools';
+import { canvasViewTools } from './canvas-view-tools';
+import { geometry3dTools } from './geometry-3d-tools';
+import { calculusAnalysisTools } from './calculus-analysis-tools';
+import { linearAlgebraStatisticsTools } from './linear-algebra-statistics-tools';
+import { transformationConicTools } from './transformation-conic-tools';
+import { serializationWidgetTools } from './serialization-widget-tools';
 
 // Check if we're in MCP mode (stdio communication)
 // When piping input, process.stdin.isTTY is undefined, not false
@@ -173,4 +180,40 @@ educationalTemplateTools.forEach(tool => {
 // Register Performance tools
 performanceTools.forEach(tool => {
   toolRegistry.register(tool);
-}); 
+});
+
+// Register Object Styling and Manipulation tools
+objectStylingTools.forEach(tool => {
+  toolRegistry.register(tool);
+});
+
+// Register Canvas and View tools
+canvasViewTools.forEach(tool => {
+  toolRegistry.register(tool);
+});
+
+// Register 3D Geometry and Solid Modeling tools
+geometry3dTools.forEach(tool => {
+  toolRegistry.register(tool);
+});
+
+// Register Calculus and Analysis tools
+calculusAnalysisTools.forEach(tool => {
+  toolRegistry.register(tool);
+});
+
+// Register Linear Algebra and Statistics tools
+linearAlgebraStatisticsTools.forEach(tool => {
+  toolRegistry.register(tool);
+});
+
+// Register Transformation and Conic tools
+transformationConicTools.forEach(tool => {
+  toolRegistry.register(tool);
+});
+
+// Register Serialization and Widget tools
+serializationWidgetTools.forEach(tool => {
+  toolRegistry.register(tool);
+});
+ 

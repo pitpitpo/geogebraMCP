@@ -106,6 +106,16 @@ async function run() {
     throw new Error('GeoGebra applet is not ready in standalone window');
   }
 
+  console.log('\n=== STEP 1b: Auto-Detect GeoGebra Version & Capabilities ===');
+  const rawVersion = await client.eval(`typeof window.ggbApplet.getVersion === 'function' ? window.ggbApplet.getVersion() : 'unknown'`);
+  const appType = await client.eval(`typeof window.ggbApplet.getAppletType === 'function' ? window.ggbApplet.getAppletType() : (typeof window.ggbApplet.getAppName === 'function' ? window.ggbApplet.getAppName() : 'unknown')`);
+  const hasExportImage = await client.eval(`typeof window.ggbApplet.exportImage === 'function'`);
+  const hasGetPNGBase64 = await client.eval(`typeof window.ggbApplet.getPNGBase64 === 'function'`);
+  const hasExportSVG = await client.eval(`typeof window.ggbApplet.exportSVG === 'function'`);
+  console.log(`Auto-Detected GeoGebra Version: ${rawVersion}`);
+  console.log(`Auto-Detected App Flavor/Type: ${appType}`);
+  console.log(`Capabilities: exportImage=${hasExportImage}, getPNGBase64=${hasGetPNGBase64}, exportSVG=${hasExportSVG}`);
+
   console.log('\n=== STEP 2: Clear / Reset Construction ===');
   await client.eval(`window.ggbApplet.newConstruction()`);
   await client.eval(`window.ggbApplet.setAxesVisible(true, true)`);

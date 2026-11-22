@@ -11,6 +11,11 @@ import {
 } from '../types/geogebra';
 import logger from './logger';
 import { v4 as uuidv4 } from 'uuid';
+import { 
+  GeoGebraVersionProfile, 
+  GeoGebraVersionDetector, 
+  GeoGebraCompatibilityEngine 
+} from './version';
 
 /**
  * GeoGebra Instance - Manages a single GeoGebra instance via Puppeteer
@@ -28,6 +33,7 @@ export class GeoGebraInstance implements GeoGebraAPI {
   private page?: Page | undefined;
   private isInitialized: boolean = false;
   private lastActivity: Date = new Date();
+  private versionProfile?: GeoGebraVersionProfile;
   
   public readonly id: string;
   public readonly config: GeoGebraConfig;
@@ -86,6 +92,24 @@ export class GeoGebraInstance implements GeoGebraAPI {
       
       // Wait for GeoGebra to be ready
       await this.waitForReady();
+      
+      // Auto-detect GeoGebra version and compile compatibility profile
+      try {
+        const detection = await this.page.evaluate(GeoGebraVersionDetector.getBrowserDetectionScript());
+        this.versionProfile = GeoGebraVersionDetector.buildProfile(
+          detection,
+          'puppeteer',
+          (this.config.appName as any) || 'classic'
+        );
+        logger.info(`GeoGebra instance ${this.id} version auto-detected: ${this.versionProfile.version.versionString} (${this.versionProfile.generation}/${this.versionProfile.appFlavor})`);
+      } catch (detErr) {
+        logger.warn(`Version auto-detection warning for ${this.id}, using fallback profile:`, detErr);
+        this.versionProfile = GeoGebraVersionDetector.createSimulatedProfile(
+          '6.0.800.0',
+          (this.config.appName as any) || 'classic',
+          'puppeteer'
+        );
+      }
       
       this.isInitialized = true;
       this.updateActivity();
@@ -304,6 +328,7 @@ export class GeoGebraInstance implements GeoGebraAPI {
         throw new Error(`GeoGebra applet not available: ${JSON.stringify(appletCheck)}`);
       }
       
+      const effectiveCommand = GeoGebraCompatibilityEngine.normalizeCommand(command, this.getVersionProfile());
       const result = await this.page!.evaluate((cmd) => {
         try {
           const success = (window as any).ggbApplet.evalCommand(cmd);
@@ -317,7 +342,7 @@ export class GeoGebraInstance implements GeoGebraAPI {
             error: error.message || 'Unknown error'
           };
         }
-      }, command);
+      }, effectiveCommand);
 
       if (!result.success) {
         throw new GeoGebraCommandError(result.error || 'Command failed', command);
@@ -746,8 +771,8 @@ export class GeoGebraInstance implements GeoGebraAPI {
             throw new Error('GeoGebra applet not available');
           }
           
-          if (typeof applet.getPNGBase64 !== 'function') {
-            throw new Error('getPNGBase64 method not available on applet');
+          if (typeof applet.getPNGBase64 !== 'function' && typeof applet.exportImage !== 'function') {
+            throw new Error('Neither exportImage nor getPNGBase64 method available on applet');
           }
 
           // Calculate effective scale if width/height provided
@@ -769,9 +794,25 @@ export class GeoGebraInstance implements GeoGebraAPI {
             effectiveScale = Math.min(scaleX, scaleY);
           }
           
-          // GEB-17: Enhanced PNG export with better error handling and validation
           let result = null;
           let lastError = null;
+
+          // Priority 1: Modern exportImage API (Suite / v6.0.700+ / v7+)
+          if (typeof applet.exportImage === 'function') {
+            try {
+              const modernRes = applet.exportImage({
+                type: 'png',
+                scale: effectiveScale,
+                transparent: transparent,
+                dpi: dpi
+              });
+              if (modernRes && typeof modernRes === 'string' && modernRes.length > 20) {
+                return modernRes.replace(/^data:image\/png;base64,/, '');
+              }
+            } catch (emErr) {
+              lastError = emErr;
+            }
+          }
           
           // Try primary method with full parameters
           try {
@@ -877,6 +918,18 @@ export class GeoGebraInstance implements GeoGebraAPI {
           
           let result = null;
           let lastError = null;
+
+          // Priority 1: Modern exportImage API (v6.0.700+, Suite, v7+)
+          if (typeof applet.exportImage === 'function') {
+            try {
+              const modernSvg = applet.exportImage({ type: 'svg' });
+              if (modernSvg && typeof modernSvg === 'string' && modernSvg.includes('<svg')) {
+                return modernSvg;
+              }
+            } catch (emSvgErr) {
+              lastError = emSvgErr;
+            }
+          }
           
           // Try exportSVG method (GeoGebra web API uses callback)
           if (typeof applet.exportSVG === 'function') {
@@ -1223,10 +1276,299 @@ export class GeoGebraInstance implements GeoGebraAPI {
   getState() {
     return {
       id: this.id,
+      initialized: this.isInitialized,
       isReady: this.isInitialized,
       lastActivity: this.lastActivity,
-      config: this.config
+      config: this.config,
+      versionProfile: this.getVersionProfile()
     };
+  }
+
+  /**
+   * Get detected GeoGebra version profile
+   */
+  getVersionProfile(): GeoGebraVersionProfile {
+    if (!this.versionProfile) {
+      this.versionProfile = GeoGebraVersionDetector.createSimulatedProfile(
+        '6.0.800.0',
+        (this.config.appName as any) || 'classic',
+        'puppeteer'
+      );
+    }
+    return this.versionProfile;
+  }
+
+  /**
+   * Run explicit version detection
+   */
+  async detectVersion(): Promise<GeoGebraVersionProfile> {
+    this.ensureInitialized();
+    const detection = await this.page!.evaluate(GeoGebraVersionDetector.getBrowserDetectionScript());
+    this.versionProfile = GeoGebraVersionDetector.buildProfile(
+      detection,
+      'puppeteer',
+      (this.config.appName as any) || 'classic'
+    );
+    return this.versionProfile;
+  }
+
+  /**
+   * Set perspective across versions
+   */
+  async setPerspective(perspective: string): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    const normPers = GeoGebraCompatibilityEngine.normalizePerspective(perspective, this.getVersionProfile());
+    await this.page!.evaluate((p) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setPerspective === 'function') {
+        applet.setPerspective(p);
+      }
+    }, normPers);
+  }
+
+  async setColor(objName: string, red: number, green: number, blue: number, alpha: number = 1): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, r, g, b, a) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setColor === 'function') {
+        applet.setColor(name, r, g, b);
+      }
+      if (applet && typeof applet.setFilling === 'function' && a !== undefined) {
+        applet.setFilling(name, a);
+      }
+    }, objName, red, green, blue, alpha);
+  }
+
+  async setVisible(objName: string, visible: boolean): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, vis) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setVisible === 'function') {
+        applet.setVisible(name, vis);
+      }
+    }, objName, visible);
+  }
+
+  async setLabelVisible(objName: string, visible: boolean): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, vis) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setLabelVisible === 'function') {
+        applet.setLabelVisible(name, vis);
+      }
+    }, objName, visible);
+  }
+
+  async setLabelStyle(objName: string, style: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, s) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setLabelStyle === 'function') {
+        applet.setLabelStyle(name, s);
+      }
+    }, objName, style);
+  }
+
+  async setCaption(objName: string, caption: string): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, cap) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setCaption === 'function') {
+        applet.setCaption(name, cap);
+      }
+    }, objName, caption);
+  }
+
+  async setFixed(objName: string, fixed: boolean, selectionAllowed: boolean = true): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, fix, sel) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setFixed === 'function') {
+        applet.setFixed(name, fix, sel);
+      }
+    }, objName, fixed, selectionAllowed);
+  }
+
+  async setCoords(objName: string, x: number, y: number, z: number = 0): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, cx, cy, cz) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setCoords === 'function') {
+        applet.setCoords(name, cx, cy, cz);
+      }
+    }, objName, x, y, z);
+  }
+
+  async setLayer(objName: string, layer: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, lay) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setLayer === 'function') {
+        applet.setLayer(name, lay);
+      }
+    }, objName, layer);
+  }
+
+  async setLineThickness(objName: string, thickness: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, t) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setLineThickness === 'function') {
+        applet.setLineThickness(name, t);
+      }
+    }, objName, thickness);
+  }
+
+  async setLineStyle(objName: string, style: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, s) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setLineStyle === 'function') {
+        applet.setLineStyle(name, s);
+      }
+    }, objName, style);
+  }
+
+  async setPointSize(objName: string, size: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, s) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setPointSize === 'function') {
+        applet.setPointSize(name, s);
+      }
+    }, objName, size);
+  }
+
+  async setPointStyle(objName: string, style: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, s) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setPointStyle === 'function') {
+        applet.setPointStyle(name, s);
+      }
+    }, objName, style);
+  }
+
+  async setFilling(objName: string, filling: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((name, f) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setFilling === 'function') {
+        applet.setFilling(name, f);
+      }
+    }, objName, filling);
+  }
+
+  async getDefinitionString(objName: string): Promise<string> {
+    this.ensureInitialized();
+    this.updateActivity();
+    return await this.page!.evaluate((name) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.getDefinitionString === 'function') {
+        return applet.getDefinitionString(name) || '';
+      }
+      return '';
+    }, objName);
+  }
+
+  async getCommandString(objName: string): Promise<string> {
+    this.ensureInitialized();
+    this.updateActivity();
+    return await this.page!.evaluate((name) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.getCommandString === 'function') {
+        return applet.getCommandString(name) || '';
+      }
+      return '';
+    }, objName);
+  }
+
+  async undo(): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate(() => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.undo === 'function') {
+        applet.undo();
+      }
+    });
+  }
+
+  async redo(): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate(() => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.redo === 'function') {
+        applet.redo();
+      }
+    });
+  }
+
+  async getXML(): Promise<string> {
+    this.ensureInitialized();
+    this.updateActivity();
+    return await this.page!.evaluate(() => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.getXML === 'function') {
+        return applet.getXML();
+      }
+      return '';
+    });
+  }
+
+  async setXML(xml: string): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((x) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setXML === 'function') {
+        applet.setXML(x);
+      }
+    }, xml);
+  }
+
+  async getBase64(): Promise<string> {
+    this.ensureInitialized();
+    this.updateActivity();
+    return await this.page!.evaluate(async () => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.getBase64 === 'function') {
+        return new Promise((resolve) => {
+          try {
+            applet.getBase64((b64: string) => resolve(b64));
+          } catch(e) {
+            resolve('');
+          }
+        });
+      }
+      return '';
+    });
+  }
+
+  async setBase64(base64: string): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    await this.page!.evaluate((b64) => {
+      const applet = (window as any).ggbApplet;
+      if (applet && typeof applet.setBase64 === 'function') {
+        applet.setBase64(b64);
+      }
+    }, base64);
   }
 
   /**
@@ -1267,14 +1609,14 @@ export class GeoGebraInstance implements GeoGebraAPI {
         }
         
         // Check export methods
-        const hasPNGExport = hasApplet && typeof applet.getPNGBase64 === 'function';
-        const hasSVGExport = hasApplet && (typeof applet.exportSVG === 'function' || typeof applet.getSVG === 'function');
+        const hasPNGExport = hasApplet && (typeof applet.getPNGBase64 === 'function' || typeof applet.exportImage === 'function');
+        const hasSVGExport = hasApplet && (typeof applet.exportSVG === 'function' || typeof applet.getSVG === 'function' || typeof applet.exportImage === 'function');
         
         if (!hasPNGExport) {
-          issues.push('PNG export method (getPNGBase64) not available');
+          issues.push('PNG export method (getPNGBase64 / exportImage) not available');
         }
         if (!hasSVGExport) {
-          issues.push('SVG export methods not available');
+          issues.push('SVG export methods (exportSVG / getSVG / exportImage) not available');
         }
         
         // Check animation methods

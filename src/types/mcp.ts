@@ -128,7 +128,7 @@ export interface McpServerConfig {
 }
 
 // Tool Registry Types
-export type ToolHandler = (params: Record<string, unknown>) => Promise<NonNullable<McpToolCallResponse['result']>>;
+export type ToolHandler = (params: any) => Promise<NonNullable<McpToolCallResponse['result']>>;
 
 export interface ToolDefinition {
   tool: McpTool;

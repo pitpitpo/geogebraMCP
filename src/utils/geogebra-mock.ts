@@ -8,6 +8,12 @@ import {
 } from '../types/geogebra';
 import logger from './logger';
 import { v4 as uuidv4 } from 'uuid';
+import { 
+  GeoGebraVersionProfile, 
+  GeoGebraVersionDetector, 
+  GeoGebraCompatibilityEngine,
+  GeoGebraAppFlavor 
+} from './version';
 
 /**
  * Mock GeoGebra Instance for demonstration and testing
@@ -22,6 +28,7 @@ export class MockGeoGebraInstance implements GeoGebraAPI {
   private animationSpeeds: Map<string, number> = new Map();
   private tracedObjects: Set<string> = new Set();
   private isAnimating: boolean = false;
+  private versionProfile: GeoGebraVersionProfile;
   
   public readonly id: string;
   public readonly config: GeoGebraConfig;
@@ -40,6 +47,12 @@ export class MockGeoGebraInstance implements GeoGebraAPI {
       language: 'en',
       ...config
     };
+    
+    this.versionProfile = GeoGebraVersionDetector.createSimulatedProfile(
+      '6.0.800.0',
+      (this.config.appName as any) || 'classic',
+      'mock'
+    );
     
     logger.info(`Created Mock GeoGebra instance ${this.id}`, { config: this.config });
   }
@@ -76,8 +89,9 @@ export class MockGeoGebraInstance implements GeoGebraAPI {
     try {
       logger.debug(`Executing mock command on instance ${this.id}: ${command}`);
       
+      const normalized = GeoGebraCompatibilityEngine.normalizeCommand(command, this.versionProfile);
       // Parse basic commands
-      const result = this.parseCommand(command);
+      const result = this.parseCommand(normalized);
       
       logger.debug(`Mock command executed successfully on instance ${this.id}: ${command}`);
       return {
@@ -617,10 +631,171 @@ export class MockGeoGebraInstance implements GeoGebraAPI {
   getState() {
     return {
       id: this.id,
+      initialized: this.isInitialized,
       isReady: this.isInitialized,
       lastActivity: this.lastActivity,
-      config: this.config
+      config: this.config,
+      versionProfile: this.versionProfile
     };
+  }
+
+  /**
+   * Set simulated GeoGebra version (for testing cross-version compatibility)
+   */
+  setSimulatedVersion(versionString: string, flavor?: GeoGebraAppFlavor): GeoGebraVersionProfile {
+    this.versionProfile = GeoGebraVersionDetector.createSimulatedProfile(
+      versionString,
+      flavor || this.versionProfile.appFlavor,
+      'mock'
+    );
+    return this.versionProfile;
+  }
+
+  /**
+   * Get version profile
+   */
+  getVersionProfile(): GeoGebraVersionProfile {
+    return this.versionProfile;
+  }
+
+  /**
+   * Detect version
+   */
+  async detectVersion(): Promise<GeoGebraVersionProfile> {
+    return this.versionProfile;
+  }
+
+  /**
+   * Set perspective
+   */
+  async setPerspective(perspective: string): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    const norm = GeoGebraCompatibilityEngine.normalizePerspective(perspective, this.versionProfile);
+    logger.debug(`Mock GeoGebra setPerspective: ${perspective} -> ${norm}`);
+  }
+
+  async setColor(objName: string, red: number, green: number, blue: number, alpha: number = 1): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    const obj = this.objects.get(objName);
+    if (obj) {
+      obj.color = `rgba(${red},${green},${blue},${alpha})`;
+    }
+  }
+
+  async setVisible(objName: string, visible: boolean): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    const obj = this.objects.get(objName);
+    if (obj) {
+      obj.visible = visible;
+    }
+  }
+
+  async setLabelVisible(_objName: string, _visible: boolean): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async setLabelStyle(_objName: string, _style: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async setCaption(_objName: string, _caption: string): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async setFixed(_objName: string, _fixed: boolean, _selectionAllowed: boolean = true): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async setCoords(objName: string, x: number, y: number, z: number = 0): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+    const obj = this.objects.get(objName);
+    if (obj) {
+      obj.x = x;
+      obj.y = y;
+      obj.z = z;
+    }
+  }
+
+  async setLayer(_objName: string, _layer: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async setLineThickness(_objName: string, _thickness: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async setLineStyle(_objName: string, _style: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async setPointSize(_objName: string, _size: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async setPointStyle(_objName: string, _style: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async setFilling(_objName: string, _filling: number): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async getDefinitionString(objName: string): Promise<string> {
+    this.ensureInitialized();
+    this.updateActivity();
+    return this.objects.has(objName) ? `${objName} defined` : '';
+  }
+
+  async getCommandString(objName: string): Promise<string> {
+    this.ensureInitialized();
+    this.updateActivity();
+    return this.objects.has(objName) ? `${objName}` : '';
+  }
+
+  async undo(): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async redo(): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async getXML(): Promise<string> {
+    this.ensureInitialized();
+    this.updateActivity();
+    return `<?xml version="1.0" encoding="utf-8"?><geogebra format="5.0" count="${this.objects.size}"></geogebra>`;
+  }
+
+  async setXML(_xml: string): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
+  }
+
+  async getBase64(): Promise<string> {
+    this.ensureInitialized();
+    this.updateActivity();
+    return 'UEsDBBQACAgI';
+  }
+
+  async setBase64(_base64: string): Promise<void> {
+    this.ensureInitialized();
+    this.updateActivity();
   }
 
   /**

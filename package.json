@@ -1,10 +1,11 @@
 {
-  "name": "@gebrai/gebrai",
-  "version": "1.1.0",
+  "name": "geogebraMCP",
+  "version": "1.2.0",
   "description": "Model Context Protocol server for GeoGebra mathematical visualization",
   "main": "dist/index.js",
   "private": false,
   "bin": {
+    "geogebraMCP": "./dist/cli.js",
     "geogebra-mcp": "./dist/cli.js",
     "gebrai": "./dist/cli.js"
   },
@@ -26,6 +27,8 @@
     "test:coverage": "jest --coverage",
     "test:compatibility": "npx ts-node test-gemini-compatibility.ts",
     "test:schema": "npx ts-node test-schema-compatibility.ts",
+    "test:version": "npx ts-node test-version-compatibility.ts",
+    "test:all": "npm run test:schema && npm run test:compatibility && npm run test:version",
     "setup": "node scripts/setup.js",
     "setup:platforms": "node scripts/setup-platforms.js",
     "lint": "eslint src/**/*.ts",
@@ -48,11 +51,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/gebrai/gebrai.git"
+    "url": "https://github.com/pitpitpo/geogebraMCP.git"
   },
-  "homepage": "https://github.com/gebrai/gebrai#readme",
+  "homepage": "https://github.com/pitpitpo/geogebraMCP#readme",
   "bugs": {
-    "url": "https://github.com/gebrai/gebrai/issues"
+    "url": "https://github.com/pitpitpo/geogebraMCP/issues"
   },
   "publishConfig": {
     "access": "public"
