@@ -1,0 +1,19 @@
+services:
+  geogebra-mcp:
+    build:
+      context: ../..
+      dockerfile: setups/docker/Dockerfile
+    container_name: geogebra-mcp
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - GEOGEBRA_APP_NAME=classic
+      - GEOGEBRA_WIDTH=800
+      - GEOGEBRA_HEIGHT=600
+    # Optional shared volumes for exported mathematical plots/renderings
+    volumes:
+      - ./exports:/app/exports
+    # stdio communication requires stdin_open and tty
+    stdin_open: true
+    tty: true

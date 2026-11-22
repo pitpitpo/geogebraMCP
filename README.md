@@ -35,9 +35,8 @@ npx @gebrai/gebrai --log-level debug
 }
 ```
 
-3. **Start Creating** - Ask Claude to create mathematical visualizations!
-
-**Need help?** Check our [Getting Started Guide](docs/guides/getting-started.md) for detailed instructions.
+3. **Multi-Platform Support** - Claude Desktop, Cursor, Windsurf, VS Code (Cline/Roo Code/Copilot), Continue.dev, JetBrains, LibreChat, and Docker!
+Check the [**Multi-Platform Setup Guide**](docs/guides/platform-setups.md) or run `npm run setup:platforms` for automated setup.
 
 ## 📦 Installation Options
 

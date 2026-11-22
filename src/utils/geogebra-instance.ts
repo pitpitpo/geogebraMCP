@@ -53,13 +53,13 @@ export class GeoGebraInstance implements GeoGebraAPI {
   /**
    * Initialize the GeoGebra instance
    */
-  async initialize(headless: boolean = true, browserArgs: string[] = []): Promise<void> {
+  async initialize(headless: boolean | 'shell' = true, browserArgs: string[] = []): Promise<void> {
     try {
       logger.info(`Initializing GeoGebra instance ${this.id}`, { headless });
       
       // Launch browser
       this.browser = await puppeteer.launch({
-        headless,
+        headless: (headless === true) ? 'shell' : headless,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -867,7 +867,7 @@ export class GeoGebraInstance implements GeoGebraAPI {
     }
 
     return this.retryOperation(async () => {
-      const svg = await this.page!.evaluate(() => {
+      const svg = await this.page!.evaluate(async () => {
         try {
           // GEB-17: Enhanced applet availability check
           const applet = (window as any).ggbApplet;
@@ -878,12 +878,28 @@ export class GeoGebraInstance implements GeoGebraAPI {
           let result = null;
           let lastError = null;
           
-          // Try exportSVG method first
+          // Try exportSVG method (GeoGebra web API uses callback)
           if (typeof applet.exportSVG === 'function') {
             try {
-              result = applet.exportSVG();
+              result = await new Promise((resolve) => {
+                try {
+                  const ret = applet.exportSVG((svgStr: any) => {
+                    if (svgStr && typeof svgStr === 'string' && svgStr.includes('<svg')) {
+                      resolve(svgStr);
+                    } else {
+                      resolve(ret && typeof ret === 'string' && ret.includes('<svg') ? ret : null);
+                    }
+                  });
+                  if (ret && typeof ret === 'string' && ret.includes('<svg')) {
+                    resolve(ret);
+                  }
+                  setTimeout(() => resolve(null), 3000);
+                } catch (e) {
+                  resolve(null);
+                }
+              });
               if (result && typeof result === 'string' && result.includes('<svg')) {
-                return result; // Success with exportSVG
+                return result; // Success with exportSVG callback
               }
             } catch (e1) {
               lastError = e1;

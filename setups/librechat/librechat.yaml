@@ -1,0 +1,13 @@
+# LibreChat Model Context Protocol (MCP) Configuration for GeoGebra
+version: 1.1.5
+
+mcpServers:
+  geogebra:
+    type: stdio
+    command: node
+    args:
+      - /mnt/9f4d8733-a954-435d-b92f-f33c068c3b1e/Leafs/4/antigravity_env/home/.t3/scratch/2026-11-22-test-this-in-geogebra-https-00683002/gebrai/dist/index.js
+    env:
+      NODE_ENV: production
+      LOG_LEVEL: info
+    timeout: 30000

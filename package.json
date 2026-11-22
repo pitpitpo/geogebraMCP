@@ -26,6 +26,8 @@
     "test:coverage": "jest --coverage",
     "test:compatibility": "npx ts-node test-gemini-compatibility.ts",
     "test:schema": "npx ts-node test-schema-compatibility.ts",
+    "setup": "node scripts/setup.js",
+    "setup:platforms": "node scripts/setup-platforms.js",
     "lint": "eslint src/**/*.ts",
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts",
